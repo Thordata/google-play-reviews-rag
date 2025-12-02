@@ -34,9 +34,13 @@ import pandas as pd
 import requests
 from dotenv import load_dotenv
 from openai import OpenAI
-from openai import OpenAIError, RateLimitError
+from openai import RateLimitError
 
-from thordata import ThordataClient
+from thordata import (
+    ThordataClient,
+    ThordataRateLimitError,
+    ThordataAPIError,
+)
 
 # -----------------------------
 # Paths & environment
@@ -143,24 +147,21 @@ def fetch_google_play_reviews(force_fetch: bool = True) -> Path:
             individual_params=INDIVIDUAL_PARAMS,
             universal_params=None,
         )
-    except Exception as e:
-        msg = str(e)
-        if "code': 402" in msg or "Insufficient permissions" in msg:
-            raise RuntimeError(
-                "Thordata Web Scraper API returned code 402 "
-                "(insufficient permissions / balance). "
-                "Please check your Thordata account balance or plan, "
-                "or run this script with --no-fetch to reuse an existing "
-                "data/google_play_reviews_raw.json file."
-            ) from e
-        raise
-    task_id = td_client.create_scraper_task(
-        file_name="google_play_reviews",
-        spider_id=GOOGLE_PLAY_SPIDER_ID,
-        spider_name=GOOGLE_PLAY_SPIDER_NAME,
-        individual_params=INDIVIDUAL_PARAMS,
-        universal_params=None,
-    )
+    except ThordataRateLimitError as e:
+        # 余额 / 配额 / 权限相关的问题（code=402/429）
+        raise RuntimeError(
+            "Thordata Web Scraper API reported a balance / rate-limit issue "
+            "while creating the Google Play reviews task.\n"
+            "Please check your Thordata account plan/balance, or run this script "
+            "with --no-fetch to reuse an existing "
+            "data/google_play_reviews_raw.json file."
+        ) from e
+    except ThordataAPIError as e:
+        # 其他业务错误
+        raise RuntimeError(
+            f"Thordata Web Scraper API returned an error while creating the task: {e}"
+        ) from e
+
     print(f"[fetch] Task created: {task_id}")
 
     # Poll status
@@ -286,10 +287,6 @@ def build_embeddings(df: pd.DataFrame, max_reviews: int = 80) -> Dict[str, Any]:
             "Please check your OpenAI plan/billing, or disable the RAG part\n"
             "of this script before running again."
         ) from e
-    resp = openai_client.embeddings.create(
-        model=EMBEDDING_MODEL,
-        input=texts,
-    )
 
     embs = np.array([item.embedding for item in resp.data], dtype="float32")
     print(f"[embed] Embeddings shape: {embs.shape}")
