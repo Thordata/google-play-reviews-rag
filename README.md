@@ -1,46 +1,36 @@
-# Google Play Reviews RAG with Thordata
+## Google Play Reviews RAG (Thordata + OpenRouter)
 
-This repository shows how to build a small **RAG‑style analysis tool** for a single Google Play app:
+Minimal, end‑to‑end example to analyze **Google Play app reviews** using:
 
-1. Use **Thordata Web Scraper API** to fetch user reviews from Google Play.
-2. Clean and structure the reviews into a Pandas DataFrame.
-3. Use **OpenAI embeddings** to build a simple similarity index.
-4. Ask questions about the app based on real user reviews (RAG).
+- **Thordata Web Scraper API** to collect reviews
+- **OpenRouter** (free‑tier friendly) for embeddings + chat
+- A tiny, in‑memory RAG pipeline in a single script
 
-It also supports a **data‑only mode**, where you only fetch and inspect reviews (without calling OpenAI).
-
-> Note: This example assumes you have access to the Thordata Google Play reviews spider, typically:
->
-> - `spider_name`: `play.google.com`  
-> - `spider_id`:   `google-play-store_reviews_by-url`
+Everything in this repo is kept as small as possible: one main script, one `.env`, one `requirements.txt`.
 
 ---
 
-## 🧩 Requirements
+### Requirements
 
-- Python **3.10+** (3.11 recommended)
-- A Thordata account and API credentials:
-  - `THORDATA_SCRAPER_TOKEN`
-  - `THORDATA_PUBLIC_TOKEN`
-  - `THORDATA_PUBLIC_KEY`
-- Access to a Thordata Web Scraper spider that fetches Google Play reviews (e.g. `google-play-store_reviews_by-url`).
-- An OpenAI API key (`OPENAI_API_KEY`) for embeddings and chat.
+- Python **3.10+**
+- A Thordata account and credentials:
+  - `THORDATA_SCRAPER_TOKEN` (required)
+  - `THORDATA_PUBLIC_TOKEN` / `THORDATA_PUBLIC_KEY` (required for Web Scraper tasks)
+- Access to the Google Play reviews spider, for example:
+  - `spider_name`: `play.google.com`
+  - `spider_id`: `google-play-store_reviews_by-url`
+- An OpenRouter API key (`OPENROUTER_API_KEY`)
 
 ---
 
-## 📦 Installation
-
-Clone this repository and create a virtual environment:
+### Install
 
 ```bash
-git clone https://github.com/Thordata/google-play-reviews-rag.git
 cd google-play-reviews-rag
 
 python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-# macOS / Linux:
-# source .venv/bin/activate
+.\.venv\Scripts\activate      # Windows
+# source .venv/bin/activate   # macOS / Linux
 
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
@@ -48,30 +38,29 @@ python -m pip install -r requirements.txt
 
 ---
 
-## 🔐 Configuration
+### Configure `.env`
 
-Copy the example environment file and fill in your credentials:
+Create your own `.env` from the example:
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
+Fill in at least these values:
 
 ```env
-# Thordata credentials
-THORDATA_SCRAPER_TOKEN=your_thordata_scraper_token
-THORDATA_PUBLIC_TOKEN=your_thordata_public_token
-THORDATA_PUBLIC_KEY=your_thordata_public_key
+# Thordata
+THORDATA_SCRAPER_TOKEN=...
+THORDATA_PUBLIC_TOKEN=...
+THORDATA_PUBLIC_KEY=...
 
-# OpenAI
-OPENAI_API_KEY=sk-...
+# OpenRouter
+OPENROUTER_API_KEY=sk-or-...
 
-# Google Play Spider (from Thordata Dashboard)
+# Google Play spider
 GOOGLE_PLAY_SPIDER_ID=google-play-store_reviews_by-url
 GOOGLE_PLAY_SPIDER_NAME=play.google.com
 
-# Individual spider parameters (match Spider config exactly)
 GOOGLE_PLAY_APP_URL=https://play.google.com/store/apps/details?id=com.linkedin.android
 GOOGLE_PLAY_NUM_REVIEWS=
 GOOGLE_PLAY_START_DATE=
@@ -79,10 +68,10 @@ GOOGLE_PLAY_END_DATE=
 GOOGLE_PLAY_COUNTRY=
 ```
 
-The keys in `INDIVIDUAL_PARAMS` inside `google_play_reviews_rag.py` must match your spider's parameter names exactly:
+The individual parameter keys used in `google_play_reviews_rag.py` are:
 
 ```python
-INDIVIDUAL_PARAMS = {
+{
     "app_url": GOOGLE_PLAY_APP_URL,
     "num_of_reviews": GOOGLE_PLAY_NUM_REVIEWS,
     "start date": GOOGLE_PLAY_START_DATE,
@@ -91,51 +80,50 @@ INDIVIDUAL_PARAMS = {
 }
 ```
 
+They **must match** the parameter names of your Thordata spider.
+
 ---
 
-## 🚀 Usage
+### Quick start: fetch + RAG in one command
 
-The main script is `google_play_reviews_rag.py`. It has three main phases:
-
-1. Fetch reviews via Thordata Web Scraper API (optional).
-2. Load & clean the reviews from JSON into a DataFrame.
-3. RAG QA using OpenAI embeddings + chat (optional if you use `--no-rag`).
-
-### 1. Fetch latest reviews + run RAG
+Fetch the latest reviews and run a simple RAG analysis in one shot:
 
 ```bash
-python google_play_reviews_rag.py --fetch \
-  --question "What do users complain about most?" \
+python google_play_reviews_rag.py --fetch ^
+  --question "What do users complain about most?" ^
   --top-k 10
 ```
 
-This will:
+What this does:
 
-1. Create a Web Scraper task for Google Play reviews.
-2. Wait until it finishes and download the JSON result.
-3. Save raw data to `data/google_play_reviews_raw.json`.
-4. Load & clean the reviews.
-5. Build embeddings for a subset of reviews.
-6. Retrieve the top‑K relevant reviews and ask OpenAI for an answer.
+1. Creates a Thordata Web Scraper task for the app.
+2. Waits for completion and downloads JSON results to `data/google_play_reviews_raw.json`.
+3. Cleans the reviews into a small DataFrame.
+4. Builds an in‑memory embedding index (NumPy only).
+5. Uses OpenRouter to answer the question based on the top‑K similar reviews.
 
-### 2. Reuse cached JSON (no fetch) + run RAG
+---
 
-Once `data/google_play_reviews_raw.json` exists, you can skip the fetch step:
+### Reuse existing JSON (no new scraping)
+
+Once `data/google_play_reviews_raw.json` exists, you can skip the scraping step:
 
 ```bash
-python google_play_reviews_rag.py --no-fetch \
-  --question "What do users like about the app UI?" \
+python google_play_reviews_rag.py --no-fetch ^
+  --question "What do users like about the app UI?" ^
   --top-k 10
 ```
 
 This is useful when:
 
-- You want to iterate on the RAG logic without hitting Thordata again.
-- You want to avoid Web Scraper API usage during local development.
+- You want to iterate on the RAG / prompt logic without re-running the spider.
+- You want to avoid extra Web Scraper usage during local development.
 
-### 3. Data‑only mode (no embeddings / no OpenAI)
+---
 
-If you only want to fetch and inspect reviews (without RAG or OpenAI), use the `--no-rag` flag:
+### Data‑only mode (no LLM, no embeddings)
+
+If you just want to fetch and inspect raw reviews, disable RAG:
 
 ```bash
 # Fetch from Thordata, then show basic stats only
@@ -143,117 +131,124 @@ python google_play_reviews_rag.py --fetch \
   --question "Anything" \
   --no-rag
 
-# Reuse existing JSON, show stats only
+# Reuse cached JSON, show stats only
 python google_play_reviews_rag.py --no-fetch \
   --question "Anything" \
   --no-rag
 ```
 
-This mode will:
+In this mode the script:
 
-- Load the reviews into a DataFrame.
-- Print a sample of the reviews.
-- Print a basic rating distribution (if available).
-- No OpenAI calls are made in this mode.
-
----
-
-## ⚙️ How it works
-
-### 1. Fetching reviews
-
-`fetch_google_play_reviews()` calls:
-
-- `ThordataClient.create_scraper_task(...)`
-- `ThordataClient.get_task_status(...)`
-- `ThordataClient.get_task_result(...)`
-
-and then downloads the resulting JSON file to:
-
-```
-data/google_play_reviews_raw.json
-```
-
-If the Thordata backend returns code 402 (insufficient permissions / balance), the script will raise a clear error instructing the user to check their plan/billing.
-
-### 2. Loading & cleaning
-
-`load_reviews_from_json(path)` expects either:
-
-- A list of review objects: `[{...}, {...}, ...]`, or
-- An object with a "data" field: `{"data": [{...}, ...]}`.
-
-It then:
-
-- Extracts `review_text`, `rating`, `review_date` (configurable via constants at the top of the script).
-- Renames them to `text`, `rating`, `date`.
-- Drops empty texts and resets the index.
-
-### 3. Embeddings index
-
-`build_embeddings(df, max_reviews=80)`:
-
-- Truncates to at most `max_reviews` reviews.
-- Truncates each review text to a safe length to control tokens.
-- Calls OpenAI embeddings API (`text-embedding-3-small`) to create vectors.
-
-Returns:
-
-```python
-{
-    "embeddings": np.ndarray,  # shape (N, D)
-    "texts": List[str],
-    "meta":  pd.DataFrame,     # rating/date per review (if available)
-}
-```
-
-If OpenAI returns `insufficient_quota`, the script raises a human‑readable RuntimeError explaining the situation.
-
-### 4. RAG QA
-
-`answer_question_with_rag(question, index, top_k)`:
-
-- Embeds the question.
-- Retrieves the top‑K most similar reviews by cosine similarity.
-- Builds a context string summarizing those reviews (rating/date + text).
-- Calls OpenAI Chat Completions (`gpt-4o-mini`) to answer the question:
-  - Focus on user complaints / praises.
-  - Highlight recurring themes and concrete examples.
+- Loads reviews from JSON into a DataFrame.
+- Prints the first few rows.
+- Prints a rating distribution (if available).
+- Does **not** call OpenRouter.
 
 ---
 
-## 📂 Project structure
+### Models
 
+By default the script uses:
+
+- Embeddings: `text-embedding-3-small` (via OpenRouter `/v1/embeddings`)
+- Chat: `stepfun/step-3.5-flash:free` (via OpenRouter `/v1/chat/completions`)
+
+You can override them from the CLI:
+
+```bash
+python google_play_reviews_rag.py --fetch ^
+  --question "Summarize overall user sentiment" ^
+  --embedding-model text-embedding-3-small ^
+  --chat-model openrouter/free
 ```
+
+Make sure the chosen models are available in your OpenRouter account.
+
+---
+
+### Advanced options (still minimal)
+
+All options are **optional** – you can ignore them for a quick start.
+
+- **Override app URL at runtime**  
+
+  ```bash
+  python google_play_reviews_rag.py --fetch ^
+    --app-url "https://play.google.com/store/apps/details?id=com.whatsapp" ^
+    --question "What do users like most?" ^
+    --top-k 10
+  ```
+
+  This does not modify your `.env`; it only affects the current run.
+
+- **Control how much data goes into embeddings**
+
+  ```bash
+  python google_play_reviews_rag.py --no-fetch ^
+    --question "Top UX issues" ^
+    --max-reviews 50 ^
+    --max-chars 400
+  ```
+
+  - `--max-reviews`: maximum number of reviews to embed (default: 80).  
+  - `--max-chars`: maximum characters per review text (default: 300).
+
+- **Save a Markdown report**
+
+  ```bash
+  python google_play_reviews_rag.py --no-fetch ^
+    --question "Summarize pricing and subscription related feedback" ^
+    --top-k 10 ^
+    --output-markdown reports/pricing_feedback.md
+  ```
+
+  The answer is still printed to the console, and a simple shareable report is saved under `reports/`.
+
+- **Analyze multiple apps in one go**
+
+  ```bash
+  python google_play_reviews_rag.py --fetch ^
+    --app-urls "https://play.google.com/store/apps/details?id=com.linkedin.android,https://play.google.com/store/apps/details?id=com.whatsapp" ^
+    --question "High-level user sentiment" ^
+    --top-k 5 ^
+    --output-markdown reports/multi_app
+  ```
+
+  - Each app is fetched and analyzed sequentially.
+  - Console will show separate sections per app.
+  - Markdown reports will be written under `reports/multi_app/`, one file per app.
+```
+
+Make sure the chosen models are available in your OpenRouter account.
+
+---
+
+### Project layout
+
+```text
 google-play-reviews-rag/
-├── google_play_reviews_rag.py   # main script (fetch + clean + RAG)
-├── requirements.txt             # Python dependencies
-├── .env.example                 # example configuration (copy to .env)
-├── .gitignore
-└── data/
-    └── google_play_reviews_raw.json   # raw JSON from Web Scraper API (runtime only)
+  google_play_reviews_rag.py   # main script (scrape + clean + RAG)
+  requirements.txt             # minimal dependencies
+  .env.example                 # example configuration
+  .env                         # your local credentials (not committed)
+  data/
+    google_play_reviews_raw.json  # raw JSON from Web Scraper (runtime only)
 ```
 
-The `data/` directory is ignored by Git and is used only for local development and caching.
+The `data/` directory is used only for local development and caching and is ignored by Git.
 
 ---
 
-## 📝 Common issues
+### Common issues
 
-### Thordata returns code 402 (insufficient permissions / balance)
+- **Thordata returns code 402 / rate limit**  
+  Check your Thordata plan and balance. For local RAG testing, you can reuse a previously downloaded JSON with `--no-fetch`.
 
-Check your Thordata account balance / plan, or contact support.  
-You can still use `--no-fetch` with a local JSON file for development.
-
-### OpenAI returns insufficient_quota (429)
-
-The script will raise a clear RuntimeError. In that case you can:
-
-- Use `--no-rag` to only fetch + inspect reviews, or
-- Upgrade your OpenAI plan and re‑run the RAG part.
+- **OpenRouter returns an error (e.g., 401 / 429)**  
+  Check `OPENROUTER_API_KEY` and your OpenRouter dashboard. You can always run in `--no-rag` mode to debug the scraping part first.
 
 ---
 
-## 🧾 License
+### License
 
-This example is provided for educational purposes and is licensed under the MIT License. See the LICENSE file for details.
+This example is provided for educational purposes and is licensed under the MIT License. See `LICENSE` for details.
